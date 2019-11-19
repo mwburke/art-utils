@@ -1,0 +1,5 @@
+tensorflow>=2.0.0
+numpy>=1.16
+pyunsplash==1.0.0b8
+pillow==6.1.0
+ortools==7.3.7083
