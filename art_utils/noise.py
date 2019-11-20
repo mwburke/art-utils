@@ -1,93 +1,130 @@
-# Taken from https://github.com/caseman/noise
-
-from math import floor, fmod, sqrt
-from random import randint
-
 import tensorflow as tf
 
-from art_utils.math import lerp
-from art_utils.constants import _GRAD3, PERMUTATION
-from art_utils.constants import _F2, _G2, _F3, _G3
+
+def map_gradients(gradient_map, gis, length):
+    index_tensor = tf.reshape(tf.concat([
+        tf.reshape(tf.tile(tf.expand_dims(gis, 1), [1, 3]), [length * 3, 1]),
+        tf.expand_dims(tf.tile(tf.range(0, limit=3), [length]), 1)
+    ], 1), [length, 3, 2])
+    return tf.gather_nd(gradient_map, index_tensor)
 
 
-def grad3(hash, x, y, z):
-    g = _GRAD3[hash % 16]
-    return x*g[0] + y*g[1] + z*g[2]
+def tf_repeat(x, num_repeats):
+    x = tf.reshape(x, [-1, 1])
+    x = tf.tile(x, [1, num_repeats])
+    return tf.reshape(x, [-1])
 
 
-def get_noise_permutation(period=None, randomize=False):
-    permutation = PERMUTATION * 2
+def get_input_vectors(shape, phases, scaling, offset):
+    x = tf.reshape(tf_repeat(offset[0] + tf.linspace(0.0, float(shape[0]) - 1., shape[0]) / float(scaling),
+                             shape[1] * phases),
+                   [shape[0], shape[1], phases]) * tf.pow(2.0, tf.linspace(0.0, float(phases) - 1., phases))
+    y = tf.reshape(tf_repeat(tf.tile(
+        offset[1] + tf.linspace(0.0, float(shape[1]) - 1., shape[1]) / scaling,
+        [shape[0]]
+    ), phases), [shape[0], shape[1], phases]) * tf.pow(2.0, tf.linspace(0.0, float(phases) - 1., phases))
+    z = tf.reshape(
+        tf.tile(offset[2] + 10. * tf.linspace(0.0, float(phases) - 1., phases), [shape[0] * shape[1]]),
+        [shape[0], shape[1], phases, 1])
+    x = tf.reshape(x, [shape[0], shape[1], phases, 1])
+    y = tf.reshape(y, [shape[0], shape[1], phases, 1])
 
-    if randomize:
-        if period is None:
-            period = len(PERMUTATION)
-
-        perm = list(range(period))
-        perm_right = period - 1
-        for i in list(perm):
-            j = randint(0, perm_right)
-            perm[i], perm[j] = perm[j], perm[i]
-
-        permutation = tuple(perm) * 2
-    else:
-        period = len(PERMUTATION)
-
-    return permutation, period
+    return tf.reshape(tf.concat([x, y, z], 3), [shape[0] * shape[1] * phases, 3])
 
 
-def gen_noise_2d_func(perm, period):
+def get_simplex_vertices(offsets, vertex_table, length):
+    vertex_table_x_index = tf.cast((offsets[:, 0] >= offsets[:, 1]), tf.int32)
+    vertex_table_y_index = tf.cast((offsets[:, 1] >= offsets[:, 2]), tf.int32)
+    vertex_table_z_index = tf.cast((offsets[:, 0] >= offsets[:, 2]), tf.int32)
 
-    @tf.function
-    def noise_2d(arr):
-        print(arr.shape)
-        x = float(arr[0])
-        y = float(arr[1])
-        s = (x + y) * _F2
-        i = tf.math.floor(x + s)
-        j = tf.math.floor(y + s)
-        t = (i + j) * _G2
-        x0 = x - (i - t)  # "Unskewed" distances from cell origin
-        y0 = y - (j - t)
+    index_list = tf.concat([
+        tf.reshape(tf.tile(tf.concat([
+            tf.expand_dims(vertex_table_x_index, 1),
+            tf.expand_dims(vertex_table_y_index, 1),
+            tf.expand_dims(vertex_table_z_index, 1),
+        ], 1), [1, 6]), [6 * length, 3]),
+        tf.expand_dims(tf.tile(tf.range(0, limit=6), [length]), 1)], 1)
+    vertices = tf.reshape(tf.gather_nd(vertex_table, index_list), [-1, 2, 3])
+    return vertices
 
-        if x0 > y0:
-            i1 = 1.
-            j1 = 0.  # Lower triangle, XY order: (0,0)->(1,0)->(1,1)
-        else:
-            i1 = 0.
-            j1 = 1.  # Upper triangle, YX order: (0,0)->(0,1)->(1,1)
 
-        x1 = x0 - i1 + _G2  # Offsets for middle corner in (x,y) unskewed coords
-        y1 = y0 - j1 + _G2
-        x2 = x0 + _G2 * 2.0 - 1.0  # Offsets for last corner in (x,y) unskewed coords
-        y2 = y0 + _G2 * 2.0 - 1.0
+def calculate_gradient_contribution(offsets, gis, gradient_map, length):
+    t = 0.5 - offsets[:, 0] ** 2. - offsets[:, 1] ** 2. - offsets[:, 2] ** 2.
+    mapped_gis = map_gradients(gradient_map, gis, length)
+    dot_products = tf.reduce_sum(mapped_gis * offsets, 1)
+    return tf.cast(tf.math.greater_equal(t, 0.), tf.float32) * t ** 4. * dot_products
 
-        # Determine hashed gradient indices of the three simplex corners
-        ii = tf.math.floormod(int(i), period)
-        jj = tf.math.floormod(int(j), period)
 
-        gi0 = perm[ii + perm[jj]] % 12
-        gi1 = perm[ii + i1 + perm[jj + j1]] % 12
-        gi2 = perm[ii + 1 + perm[jj + 1]] % 12
+def noise3d(input_vectors, perm, grad3, vertex_table, length):
+    skew_factors = (input_vectors[:, 0] + input_vectors[:, 1] + input_vectors[:, 2]) * 1.0 / 3.0
+    skewed_vectors = tf.floor(input_vectors + tf.expand_dims(skew_factors, 1))
+    unskew_factors = (skewed_vectors[:, 0] + skewed_vectors[:, 1] + skewed_vectors[:, 2]) * 1.0 / 6.0
+    offsets_0 = input_vectors - (skewed_vectors - tf.expand_dims(unskew_factors, 1))
+    simplex_vertices = get_simplex_vertices(offsets_0, vertex_table, length)  # divided it by 2, doesn't error now
+    offsets_1 = offsets_0 - simplex_vertices[:, 0, :] + 1.0 / 6.0
+    offsets_2 = offsets_0 - simplex_vertices[:, 1, :] + 1.0 / 3.0
+    offsets_3 = offsets_0 - 0.5
+    masked_skewed_vectors = tf.cast(skewed_vectors, tf.int32) % 256
+    gi0s = tf.gather_nd(
+        perm,
+        tf.expand_dims(masked_skewed_vectors[:, 0], 1) +
+        tf.expand_dims(tf.gather_nd(
+            perm,
+            tf.expand_dims(masked_skewed_vectors[:, 1], 1) +
+            tf.expand_dims(tf.gather_nd(
+                perm,
+                tf.expand_dims(masked_skewed_vectors[:, 2], 1)), 1)), 1)
+    ) % 12
+    gi1s = tf.gather_nd(
+        perm,
+        tf.expand_dims(masked_skewed_vectors[:, 0], 1) +
+        tf.expand_dims(tf.cast(simplex_vertices[:, 0, 0], tf.int32), 1) +
+        tf.expand_dims(tf.gather_nd(
+            perm,
+            tf.expand_dims(masked_skewed_vectors[:, 1], 1) +
+            tf.expand_dims(tf.cast(simplex_vertices[:, 0, 1], tf.int32), 1) +
+            tf.expand_dims(tf.gather_nd(
+                perm,
+                tf.expand_dims(masked_skewed_vectors[:, 2], 1) +
+                tf.expand_dims(tf.cast(simplex_vertices[:, 0, 2], tf.int32), 1)), 1)), 1)
+    ) % 12
+    gi2s = tf.gather_nd(
+        perm,
+        tf.expand_dims(masked_skewed_vectors[:, 0], 1) +
+        tf.expand_dims(tf.cast(simplex_vertices[:, 1, 0], tf.int32), 1) +
+        tf.expand_dims(tf.gather_nd(
+            perm,
+            tf.expand_dims(masked_skewed_vectors[:, 1], 1) +
+            tf.expand_dims(tf.cast(simplex_vertices[:, 1, 1], tf.int32), 1) +
+            tf.expand_dims(tf.gather_nd(
+                perm,
+                tf.expand_dims(masked_skewed_vectors[:, 2], 1) +
+                tf.expand_dims(tf.cast(simplex_vertices[:, 1, 2], tf.int32), 1)), 1)), 1)
+    ) % 12
+    gi3s = tf.gather_nd(
+        perm,
+        tf.expand_dims(masked_skewed_vectors[:, 0], 1) +
+        1 +
+        tf.expand_dims(tf.gather_nd(
+            perm,
+            tf.expand_dims(masked_skewed_vectors[:, 1], 1) +
+            1 +
+            tf.expand_dims(tf.gather_nd(
+                perm,
+                tf.expand_dims(masked_skewed_vectors[:, 2], 1) +
+                1), 1)), 1)
+    ) % 12
+    n0s = calculate_gradient_contribution(offsets_0, gi0s, grad3, length)
+    n1s = calculate_gradient_contribution(offsets_1, gi1s, grad3, length)
+    n2s = calculate_gradient_contribution(offsets_2, gi2s, grad3, length)
+    n3s = calculate_gradient_contribution(offsets_3, gi3s, grad3, length)
+    return 23.0 * tf.squeeze(
+        tf.expand_dims(n0s, 1) + tf.expand_dims(n1s, 1) + tf.expand_dims(n2s, 1) + tf.expand_dims(n3s, 1))
 
-        # Calculate the contribution from the three corners
-        tt = 0.5 - x0 ** 2. - y0 ** 2.
-        if tt > 0:
-            g = _GRAD3[gi0]
-            noise = tt ** 4. * (g[0] * x0 + g[1] * y0)
-        else:
-            noise = 0.0
 
-        tt = 0.5 - x1 ** 2. - y1 ** 2.
-        if tt > 0:
-            g = _GRAD3[gi1]
-            noise += tt ** 4. * (g[0] * x1 + g[1] * y1)
-
-        tt = 0.5 - x2 ** 2. - y2 ** 2.
-        if tt > 0:
-            g = _GRAD3[gi2]
-            noise += tt ** 4. * (g[0] * x2 + g[1] * y2)
-
-        return noise * 70.0  # scale noise to [-1, 1]
-
-    return noise_2d
-
+def calculate_image(noise_values, phases, shape):
+    val = tf.floor((tf.add_n(tf.split(
+        tf.reshape(noise_values, [shape[0], shape[1], phases]) / tf.pow(
+            2.0,
+            tf.linspace(0.0, phases - 1., phases)), phases, 2)) + 1.0) * 128.)
+    return tf.concat([val, val, val], 2)
