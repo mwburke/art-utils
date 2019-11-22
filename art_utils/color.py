@@ -1,4 +1,7 @@
 import tensorflow as tf
+import numpy as np
+
+from art_utils.kmeans import kmeans
 
 
 def rgb_to_cmyk(arr, rgb_scale=255., cmyk_scale=100.):
@@ -13,3 +16,11 @@ def rgb_to_cmyk(arr, rgb_scale=255., cmyk_scale=100.):
 def cmyk_to_rgb(arr, rgb_scale=255., cmyk_scale=100.):
     return rgb_scale * (1.0 - ((arr[:, :, 0:3] + tf.expand_dims(arr[:, :, 3], axis=2)) / cmyk_scale))
 
+
+def get_colors_from_img(img, n_colors, n_iter=10):
+    data = tf.convert_to_tensor(np.array(img), dtype=tf.float32)
+    data = tf.reshape(data, [data.shape[0] * data.shape[1], 3])
+
+    assignments, centroids = kmeans(data, n_colors, n_iter)
+
+    return centroids.numpy().astype(np.uint8).tolist()

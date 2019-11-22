@@ -7,7 +7,7 @@ from art_utils.kmeans import kmeans
 # Probably can downsample actual points to do kmeans on
 # Then do assignment of color based on nearest centroid like in the algorithm
 
-img_file = '004'
+img_file = '002'
 img_path = f'img/{img_file}.jpg'
 
 img = Image.open(img_path)
