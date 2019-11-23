@@ -126,5 +126,5 @@ def calculate_image(noise_values, phases, shape):
     val = tf.floor((tf.add_n(tf.split(
         tf.reshape(noise_values, [shape[0], shape[1], phases]) / tf.pow(
             2.0,
-            tf.linspace(0.0, phases - 1., phases)), phases, 2)) + 1.0) * 128.)
+            tf.linspace(0.0, float(phases) - 1., phases)), phases, 2)) + 1.0) * 128.)
     return tf.concat([val, val, val], 2)

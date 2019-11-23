@@ -68,7 +68,6 @@ def combine_using_mask(imgs, mask):
         for img in imgs:
             new_imgs.append(tf.convert_to_tensor(np.array(img), dtype=tf.float32))
         imgs = tf.stack(new_imgs)
-        # imgs = tf.squeeze(imgs, axis=0)
 
     combined = tf.reduce_sum(tf.stack([
         imgs[i, :, :] * tf.expand_dims(mask[i, :, :], 2) for i in range(mask.shape[0])

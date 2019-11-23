@@ -60,7 +60,19 @@ angles = tf.acos(tf.clip_by_value((tf.reduce_sum(tf.multiply(pixel_locs, base_ve
 num_rays = 24
 
 # Get rays
-rays = tf.floor(tf.math.mod(angles / PI * 360. - num_rays / 4., num_rays) / (num_rays / 2.))
+angles = angles / PI
+
+mask = tf.stack([angles, 1. - angles])
+
+imgs = [img_1, img_2]
+
+combined = combine_using_mask(imgs, mask)
+
+img = Image.fromarray(combined.numpy().astype(np.uint8))
+img.show()
+
+
+rays = tf.floor(tf.math.mod(angles * 360. - num_rays / 4., num_rays) / (num_rays / 2.))
 
 mask = tf.stack([rays, 1. - rays])
 
