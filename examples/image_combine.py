@@ -10,13 +10,14 @@ from art_utils.constants import PI
 
 # img_1 = Image.open('examples/img/005.jpg')
 # img_2 = Image.open('examples/img/006.jpg')
-img_1 = Image.open('img/005.jpg')
-img_2 = Image.open('img/006.jpg')
+img_1 = Image.open('img/012.jpg')
+img_2 = Image.open('img/013.jpg')
 img_3 = Image.open('img/001.jpg')
 
 img_1, img_2 = resize_images(img_1, img_2)
 img_1, img_3 = resize_images(img_1, img_3)
 img_2, img_3 = resize_images(img_2, img_3)
+img_1, img_2 = resize_images(img_1, img_2)
 
 imgs = [img_1, img_2, img_3]
 
@@ -35,13 +36,14 @@ mask = tf.convert_to_tensor(mask, dtype=tf.float32)
 combined = combine_using_mask(imgs, mask)
 
 img = Image.fromarray(combined.numpy().astype(np.uint8))
-img.show()
+# img.show()
 
 
 width = img_1.size[0]
 height = img_1.size[1]
 
-point = tf.constant([width * random.random(), height * random.random()])
+# point = tf.constant([width * random.random(), height * random.random()])
+point = tf.constant([width * 0.5, height * 0.485])
 
 base_angle = math.cos(random.random() * PI * 2.)
 base_vec = tf.constant([math.cos(base_angle), math.sin(base_angle)], dtype=tf.float32)
@@ -57,7 +59,7 @@ angles = tf.acos(tf.clip_by_value((tf.reduce_sum(tf.multiply(pixel_locs, base_ve
             tf.norm(base_vec, axis=0) * tf.norm(pixel_locs, axis=2)), -1., 1.))
 
 
-num_rays = 24
+num_rays = 30
 
 # Get rays
 angles = angles / PI
@@ -69,7 +71,7 @@ imgs = [img_1, img_2]
 combined = combine_using_mask(imgs, mask)
 
 img = Image.fromarray(combined.numpy().astype(np.uint8))
-img.show()
+# img.show()
 
 
 rays = tf.floor(tf.math.mod(angles * 360. - num_rays / 4., num_rays) / (num_rays / 2.))
@@ -81,4 +83,31 @@ imgs = [img_1, img_2]
 combined = combine_using_mask(imgs, mask)
 
 img = Image.fromarray(combined.numpy().astype(np.uint8))
+img.save('winter_fall.png')
+img.show()
+
+
+num_cols = 15
+min_frac = 0.1
+max_frac = 0.9
+
+mask = np.zeros(shape=(2, height, width), dtype=np.uint8)
+
+for i, frac in zip(range(num_cols), [i for i in np.arange(min_frac, max_frac, ((max_frac - min_frac) / (num_cols)))]):
+    low = int(i * width / num_cols)
+    high = int((i + frac) * width / num_cols)
+    higher = int((i + 1) * width / num_cols)
+
+    mask[0, :, low:high] = 1
+    mask[1, :, high:higher] = 1
+
+
+mask = tf.convert_to_tensor(mask, dtype=tf.float32)
+
+imgs = [img_1, img_2]
+
+combined = combine_using_mask(imgs, mask)
+
+img = Image.fromarray(combined.numpy().astype(np.uint8))
+img.save('winter_fall.png')
 img.show()

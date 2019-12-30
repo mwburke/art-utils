@@ -1,3 +1,6 @@
+# TODO: weighted array sampling
+# TODO: random selection of points in circle
+
 import tensorflow as tf
 
 @tf.function

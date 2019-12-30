@@ -4,14 +4,12 @@ Utilities for creating generative art in python
 
 ## TODO
 
-- Shape identification/mask creation
-- Shape rotation
+- Polygon identification/mask creation
 - Image resizing for more than 2 images
-- Symmetric shape identification with rotation/distance from point
+    - Wrapper around existing one?
 - Fractal brownian motion
 - Marching squares
-- Contour line identification?k
+- Contour line identification?
 - Domain warping
 - Reaction diffusion
 - *Rastering/anti-aliasing for drawn shapes?*
-- 

@@ -7,6 +7,8 @@ from art_utils.kmeans import kmeans
 # Probably can downsample actual points to do kmeans on
 # Then do assignment of color based on nearest centroid like in the algorithm
 
+
+# 1, 2, 4, 5, 6
 img_file = '002'
 img_path = f'img/{img_file}.jpg'
 
@@ -33,12 +35,12 @@ data = data.numpy()
 temp1 = data
 temp2 = data
 
-for i in range(k):
-    temp1[assignments == i, :] = centroids[i, :]
+# for i in range(k):
+#     temp1[assignments == i, :] = centroids[i, :]
 
 out_data = tf.reshape(temp1, orig_shape).numpy().astype(np.uint8)
 
-Image.fromarray(out_data).show()
+# Image.fromarray(out_data).show()
 
 # Uncomment this to get a strip with cluser colors appended to bottom of image
 width = out_data.shape[1]

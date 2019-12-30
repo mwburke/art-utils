@@ -5,6 +5,7 @@ import numpy as np
 from art_utils.transform import flip_left_right, flip_up_down
 from art_utils.transform import rot_90
 
+
 img_path = 'img/005.jpg'
 
 img = Image.open(img_path)
