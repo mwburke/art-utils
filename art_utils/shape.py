@@ -7,6 +7,7 @@ from typing import List
 from numpy import array, pi, cos, sin, round, append, arange, abs, floor
 from numpy import arctan2, mean, argsort, empty, empty_like, ones, unique
 from numpy import meshgrid, vstack, arange
+from numpy.linalg import norm
 from matplotlib.path import Path
 
 
@@ -114,6 +115,19 @@ def get_line(p1: array, p2: array, pixel_size=None) -> array:
         points = round_to_pixels(points, pixel_size)
 
     return points
+
+
+def get_circle_fill_mask(arr_size: array, x: float, y: float, radius: float) -> array:
+    _x, _y = meshgrid(arange(arr_size[0]), arange(arr_size[1]))
+    _x, _y = _x.flatten(), _y.flatten()
+    points = vstack((_x, _y)).T
+
+    dists = norm(points - (x, y),  axis=1)
+
+    mask = dists <= radius
+    mask = mask.reshape(arr_size[0], arr_size[1])
+
+    return mask
 
 
 def get_polygon_fill_mask(poly_points: array, arr_size: array) -> array:

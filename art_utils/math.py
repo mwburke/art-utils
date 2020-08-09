@@ -3,11 +3,11 @@
 
 import numpy as np
 
+
 def lerp(t, a, b):
     return a + t * (b - a)
 
 
-@tf.function
 def clamp(x, a, b):
     return np.min(np.max(x, a), b)
 

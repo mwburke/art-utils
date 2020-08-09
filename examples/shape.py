@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 
-from art_utils.shape import chiakins_curve, get_polygon_fill_mask
+from art_utils.shape import chiakins_curve, get_polygon_fill_mask, get_circle_fill_mask
 
 
 points = np.array([[0.05, 20], [0.25 ,360], [0.75, 460], [0.95, 20]])
@@ -36,9 +36,19 @@ points = np.array([
 
 mask = get_polygon_fill_mask(points, arr.shape)
 
-
 arr[mask] = 255
 
+im = Image.fromarray(np.uint8(arr))
+im.show()
+
+
+x = 100
+y = 100
+radius = 100
+
+mask = get_circle_fill_mask(arr.shape, x, y, radius)
+
+arr[mask] = 255
 
 im = Image.fromarray(np.uint8(arr))
 im.show()

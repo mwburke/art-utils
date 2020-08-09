@@ -24,3 +24,12 @@ def get_colors_from_img(img, n_colors, n_iter=10):
     assignments, centroids = kmeans(data, n_colors, n_iter)
 
     return centroids.numpy().astype(np.uint8).tolist()
+
+
+def rgb_to_greyscale(arr):
+    return (tf.reduce_sum(arr, [0, 1]) / 3.).numpy()
+
+
+def invert_colors(arr, mask, color_scale=255.):
+    arr[mask] = color_scale - arr[mask]
+    return arr
