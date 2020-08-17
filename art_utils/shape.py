@@ -3,12 +3,18 @@
 # TODO: point in polygon
 # TODO: marching squares
 
+from art_utils.constants import PI
+
 from typing import List
 from numpy import array, pi, cos, sin, round, append, arange, abs, floor
 from numpy import arctan2, mean, argsort, empty, empty_like, ones, unique
 from numpy import meshgrid, vstack, arange
 from numpy.linalg import norm
 from matplotlib.path import Path
+
+
+def degrees_to_radians(degrees):
+    return degrees / 180 * PI
 
 
 def chiakins_curve(coords: array, refinements: int=5) -> array:
@@ -39,6 +45,25 @@ def convert_points_clockwise(points: array) -> array:
     clockwise_points = points[argsort(angles)]
 
     return clockwise_points
+
+
+def get_rect_points(x, y, width, height, mode='center'):
+    points = []
+
+    if mode == 'center':
+        points.append([x - width / 2, y - height / 2])
+        points.append([x + width / 2, y - height / 2])
+        points.append([x - width / 2, y + height / 2])
+        points.append([x + width / 2, y + height / 2])
+    else:
+        points.append([x, y])
+        points.append([x + width, y])
+        points.append([x, y + height])
+        points.append([x + width, y])
+
+    points = convert_points_clockwise(array(points))
+
+    return points
 
 
 def get_polygon_centroid(points: array) -> array:

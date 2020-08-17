@@ -6,3 +6,5 @@ scikit-image==0.16.2
 matplotlib>=1.2.1
 ortools
 tensorflow_addons
+pyyaml
+click

@@ -7,10 +7,10 @@ import numpy as np
 from art_utils.transform import flip_up_down
 from art_utils.math import lerp
 
-img_path = 'img/008.jpg'
+img_path = 'examples/img/008.jpg'
 
 img = Image.open(img_path)
-img.show()
+# img.show()
 
 arr = np.array(img)
 
@@ -24,20 +24,24 @@ vertices = np.array([
     [center[0], center[1] + height]
 ])
 
-flipped_arr = flip_up_down(arr)
+flipped_arr = flip_up_down(arr.copy())
 
 ratios = [1, 0.8, 0.6, 0.4, 0.2]
+# ratios = [1, 0.5]
+
+new_arr = arr.copy()
 
 for i, r in enumerate(ratios):
     new_verts = np.zeros(vertices.shape)
-    new_verts[:, 0] = lerp(r, vertices[:, 0], center[0])
-    new_verts[:, 1] = lerp(r, vertices[:, 1], center[1])
+    new_verts[:, 0] = lerp(1 - r, vertices[:, 0], center[0])
+    new_verts[:, 1] = lerp(1 - r, vertices[:, 1], center[1])
+    print(i, r, new_verts)
     mask = polygon2mask(arr.shape, new_verts)
 
     if (i % 2) == 0:
-        arr = np.place(arr, mask, flipped_arr)
+        np.place(new_arr, mask, flipped_arr[mask])
     else:
-        arr = np.place(arr, mask, arr)
+        np.place(new_arr, mask, arr[mask])
 
-new_img = Image.fromarray(arr)
+new_img = Image.fromarray(new_arr)
 new_img.show()
