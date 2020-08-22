@@ -1,0 +1,17 @@
+images:
+- examples/img/
+transforms:
+    t1:
+        mask:
+            shape: rect
+            units: ratio
+            x: 0.5
+            y: 0.5
+            width: 0.8
+            height: 0.2
+            mode: center
+            rotation: 0
+        rotation: 180
+        color: invert
+    t2:
+        
