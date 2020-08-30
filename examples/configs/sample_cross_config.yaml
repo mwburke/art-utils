@@ -52,7 +52,7 @@ transforms:
             - opposite
         rot_type: all  # all
         rotation: vertical  # 180, horizontal, vertical
-        # color: greyscale  # invert
+#        color: invert  # invert greyscale
 output:
 #    outfile: pink_mountain_cross_flipped.jpg
     images:
