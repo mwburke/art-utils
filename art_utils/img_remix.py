@@ -2,15 +2,21 @@ from art_utils.image import resize_images
 from art_utils.shape import regular_polygon_points, round_to_pixels, degrees_to_radians
 from art_utils.shape import get_circle_fill_mask, get_polygon_fill_mask, get_rect_points, get_bounding_box, rotate, convert_points_clockwise, get_polygon_centroid
 
-from PIL import Image, ImageFile
+from PIL import Image
 import numpy as np
-ImageFile.LOAD_TRUNCATED_IMAGES = True
+import click
+
+from yaml import load
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader
 
 
 def remix(config):
     images = []
     for image, path in config['images'].items():
-        images.append((image, Image.open(path)))
+        images.append((image, Image.open(path).convert('RGB')))
 
     image_data = {}
     if len(images) > 1:
@@ -34,7 +40,7 @@ def remix(config):
     if len(output_images) == 1:
         out_img_arr = image_data[output_images[0]]
     else:
-        mask = masks_process(output_config['masks'], output_config['actions'], img_arr.shape)
+        mask = masks_process(output_config['masks'], img_arr.shape)
         out_img_arr = np.where(mask, output_images[0], output_images[1])
 
     out_img = Image.fromarray(out_img_arr.astype(np.uint8))
@@ -44,11 +50,12 @@ def remix(config):
     out_img.show()
 
 
-def masks_process(masks, actions, img_size):
+def masks_process(masks, img_size):
     final_mask = get_shape_mask(masks[0], img_size)
-    if actions is not None:
-        for action, mask_spec in zip(actions, masks[1:]):
+    if len(masks) > 1:
+        for mask_spec in masks[1:]:
             mask = get_shape_mask(mask_spec, img_size)
+            action = mask_spec['action']
             if action == 'add':
                 final_mask = np.logical_or(final_mask, mask)
             elif action == 'overlap':
@@ -63,11 +70,7 @@ def masks_process(masks, actions, img_size):
 def apply_image_transform(transform, img_arr):
     # Are input size values coordinates or ratios of image size
     masks = transform['masks']
-    if 'actions' in transform:
-        actions = transform['actions']
-    else:
-        actions = None
-    mask = masks_process(masks, actions, img_arr.shape)
+    mask = masks_process(masks, img_arr.shape)
     rot_type = None
     rotation = None
     color = None
@@ -113,11 +116,12 @@ def get_transform_background(img_arr, mask, rot_type, rotation, color=None):
                 bg = np.rot90(bg, int(int(rotation) / 90))
 
     new_arr = img_arr.copy()
-    new_arr[bounds[2]:bounds[3], bounds[0]:bounds[1]] = bg
+    new_arr[bounds[2]:bounds[3], bounds[0]:bounds[1], :] = bg
 
     if color is not None:
         if color == 'greyscale':
-            new_arr = np.dot(new_arr[..., :3], [0.2989, 0.5870, 0.1140])
+            new_arr = np.dot(new_arr[..., :3], np.array([0.2989, 0.5870, 0.1140]).T)
+            new_arr = np.repeat(new_arr[:, :, np.newaxis], 3, axis=2)
         elif color == 'invert':
             new_arr = 255 - new_arr
 
@@ -192,3 +196,16 @@ def get_shape_mask(mask_spec, img_size):
         mask = get_circle_fill_mask(img_size, x, y, radius)
 
     return mask
+
+
+@click.command()
+@click.option('--config_file')
+def remix_cli(config_file):
+    with open(config_file, 'r') as f:
+        config = load(f, Loader=Loader)
+
+    remix(config)
+
+
+if __name__ == '__main__':
+    remix_cli()
