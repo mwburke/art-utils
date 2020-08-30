@@ -2,6 +2,7 @@ from art_utils.image import resize_images
 from art_utils.shape import regular_polygon_points, round_to_pixels, degrees_to_radians
 from art_utils.shape import get_circle_fill_mask, get_polygon_fill_mask, get_rect_points, get_bounding_box, rotate, convert_points_clockwise, get_polygon_centroid
 
+from skimage.transform import rotate
 from PIL import Image
 import numpy as np
 import click
@@ -109,11 +110,12 @@ def get_transform_background(img_arr, mask, rot_type, rotation, color=None):
         elif rotation == 'vertical':
             bg = np.flipud(bg)
         elif type(rotation) == int:  # rotation.isdigit():
-            if rotation == 180:
-                bg = np.fliplr(bg)
-                bg = np.flipud(bg)
-            elif rotation in [90, 270]:
-                bg = np.rot90(bg, int(int(rotation) / 90))
+            bg = rotate(bg, rotation) * 255
+            # if rotation == 180:
+            #     bg = np.fliplr(bg)
+            #     bg = np.flipud(bg)
+            # elif rotation in [90, 270]:
+            #     bg = np.rot90(bg, int(int(rotation) / 90))
 
     new_arr = img_arr.copy()
     new_arr[bounds[2]:bounds[3], bounds[0]:bounds[1], :] = bg
