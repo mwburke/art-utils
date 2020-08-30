@@ -8,9 +8,10 @@ from art_utils.constants import PI
 from typing import List
 from numpy import array, pi, cos, sin, round, append, arange, abs, floor
 from numpy import arctan2, mean, argsort, empty, empty_like, ones, unique
-from numpy import meshgrid, vstack, arange
+from numpy import meshgrid, vstack, arange, squeeze, atleast_2d, zeros
 from numpy.linalg import norm
 from matplotlib.path import Path
+from skimage.draw import polygon, polygon2mask, circle
 
 
 def degrees_to_radians(degrees):
@@ -32,7 +33,7 @@ def chiakins_curve(coords: array, refinements: int=5) -> array:
 
 
 def angle_between(points: array) -> array:
-    angles = arctan2(points % (2 * pi))
+    angles = arctan2(points[:, 1], points[:, 0]) % (2 * pi)
     return angles
 
 
@@ -47,7 +48,7 @@ def convert_points_clockwise(points: array) -> array:
     return clockwise_points
 
 
-def get_rect_points(x, y, width, height, mode='center'):
+def get_rect_points(x, y, width, height, mode='center', rotation=0):
     points = []
 
     if mode == 'center':
@@ -55,15 +56,30 @@ def get_rect_points(x, y, width, height, mode='center'):
         points.append([x + width / 2, y - height / 2])
         points.append([x - width / 2, y + height / 2])
         points.append([x + width / 2, y + height / 2])
+
+        center = array([x, y])
     else:
         points.append([x, y])
         points.append([x + width, y])
         points.append([x, y + height])
         points.append([x + width, y])
 
+        center = array([x + width / 2, y + height / 2])
+
     points = convert_points_clockwise(array(points))
 
+    points = rotate(points, center, rotation)
+
     return points
+
+
+def rotate(p, origin=(0, 0), degrees=0):
+    angle = degrees_to_radians(degrees)
+    R = array([[cos(angle), -sin(angle)],
+               [sin(angle),  cos(angle)]])
+    o = atleast_2d(origin)
+    p = atleast_2d(p)
+    return squeeze((R @ (p.T-o.T) + o.T).T)
 
 
 def get_polygon_centroid(points: array) -> array:
@@ -113,9 +129,8 @@ def regular_polygon_points(x, y, radius, n_points, rot_angle=0):
     base_angle = pi / 2
     angle = pi * 2 / n_points
     points = empty((n_points, 2), float)
-    points[:, 0] = x + cos(base_angle + rot_angle + arange(n_points) * -angle) * radius
-    points[:, 1] = y + sin(base_angle + rot_angle + arange(n_points) *- angle) * radius
-
+    points[:, 0] = x + cos(base_angle + rot_angle + arange(n_points) * angle) * radius
+    points[:, 1] = y + sin(base_angle + rot_angle + arange(n_points) * angle) * radius
     return points
 
 
@@ -143,14 +158,19 @@ def get_line(p1: array, p2: array, pixel_size=None) -> array:
 
 
 def get_circle_fill_mask(arr_size: array, x: float, y: float, radius: float) -> array:
-    _x, _y = meshgrid(arange(arr_size[0]), arange(arr_size[1]))
-    _x, _y = _x.flatten(), _y.flatten()
-    points = vstack((_x, _y)).T
+    # _x, _y = meshgrid(arange(arr_size[0]), arange(arr_size[1]))
+    # _x, _y = _x.flatten(), _y.flatten()
+    # points = vstack((_x, _y)).T
+    #
+    # dists = norm(points - (x, y),  axis=1)
+    #
+    # mask = dists <= radius
+    # mask = mask.reshape(arr_size[0], arr_size[1])
 
-    dists = norm(points - (x, y),  axis=1)
-
-    mask = dists <= radius
-    mask = mask.reshape(arr_size[0], arr_size[1])
+    rr, cc = circle(x, y, radius, shape=arr_size)
+    mask = zeros(arr_size, dtype=bool)
+    mask[rr, cc] = True
+    mask = mask[:, :, 0].reshape(mask.shape[0], mask.shape[1])
 
     return mask
 
@@ -162,13 +182,17 @@ def get_polygon_fill_mask(poly_points: array, arr_size: array) -> array:
     :return:
     """
 
-    x, y = meshgrid(arange(arr_size[0]), arange(arr_size[1]))  # make a canvas with coordinates
-    x, y = x.flatten(), y.flatten()
-    points = vstack((x, y)).T
+    # x, y = meshgrid(arange(arr_size[0]), arange(arr_size[1]))  # make a canvas with coordinates
+    # x, y = x.flatten(), y.flatten()
+    # points = vstack((x, y)).T
+    #
+    # p = Path(poly_points)
+    # grid = p.contains_points(points)
+    # mask = grid.reshape(arr_size[0], arr_size[1])
 
-    p = Path(poly_points)
-    grid = p.contains_points(points)
-    mask = grid.reshape(arr_size[0], arr_size[1])
+    mask = polygon2mask(arr_size, poly_points)
+    mask = mask[:, :, 0].reshape(mask.shape[0], mask.shape[1])
+
     return mask
 
 
@@ -245,3 +269,12 @@ def create_edge_entry(p1: array, p2: array) -> dict:
         edge['slope'] = (right[1] - left[1]) / (right[0] - left[0])
 
     return edge
+
+
+def get_bounding_box(points):
+    min_x = points[0, :].min()
+    max_x = points[0, :].max()
+    min_y = points[1, :].min()
+    max_y = points[1, :].max()
+
+    return [min_x, max_x, min_y, max_y]

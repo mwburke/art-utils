@@ -1,0 +1,64 @@
+images:
+    fall_mountain:
+        img/009.jpg
+transforms:
+    -
+        image: fall_mountain
+        masks:
+            -
+                shape: rect
+                units: ratio
+                x: 0.5
+                y: 0.5
+                width: 1.0
+                height: 0.2
+                mode: center
+                rotation: 45
+            -
+                shape: rect
+                units: ratio
+                x: 0.5
+                y: 0.5
+                width: 1.0
+                height: 0.2
+                mode: center
+                rotation: -45
+            -
+                shape: circle
+                x: 0.5
+                y: 0.5
+                radius: 0.5
+                units: ratio
+            -
+                shape: regular_polygon
+                x: 0.5
+                y: 0.5
+                num_sides: 6
+                radius: 0.8
+                units: ratio
+                rotation: 0
+            -
+                shape: regular_polygon
+                x: 0.5
+                y: 0.5
+                num_sides: 4
+                radius: 1.5
+                units: ratio
+                rotation: 0
+        actions:
+            - add  # add, subtract, opposite
+            - opposite
+            - opposite
+            - opposite
+        rot_type: all  # all
+        rotation: vertical  # 180, horizontal, vertical
+        # color: greyscale  # invert
+output:
+#    outfile: pink_mountain_cross_flipped.jpg
+    images:
+        - fall_mountain
+        # - forest_mountain
+#    masks:
+#        -
+#    actions:
+#        - add
