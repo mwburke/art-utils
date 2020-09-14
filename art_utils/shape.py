@@ -6,9 +6,10 @@
 from art_utils.constants import PI
 
 from typing import List
+from random import random
 from numpy import array, pi, cos, sin, round, append, arange, abs, floor
 from numpy import arctan2, mean, argsort, empty, empty_like, ones, unique
-from numpy import meshgrid, vstack, arange, squeeze, atleast_2d, zeros
+from numpy import meshgrid, vstack, arange, squeeze, atleast_2d, zeros, empty
 from numpy.linalg import norm
 from matplotlib.path import Path
 from skimage.draw import polygon, polygon2mask, circle
@@ -278,3 +279,24 @@ def get_bounding_box(points):
     max_y = points[1, :].max()
 
     return [min_x, max_x, min_y, max_y]
+
+
+def circle_pack(x, y, max_radius, min_radius, radius_decrease, num_retries):
+    circles = array([[random() * x, random() * y, max_radius]])
+
+    curr_radius = max_radius
+
+    while curr_radius >= min_radius:
+        count_tries = 0
+        while count_tries < num_retries:
+            loc = array([random() * x, random() * y])
+            count_overlaps = sum((norm(loc - circles[:, 0:2], axis=1) - circles[:, 2] - curr_radius) < 0)
+            if count_overlaps == 0:
+                circles = append(circles, array([[loc[0], loc[1], curr_radius]]), axis=0)
+                # circles = append(circles, array([loc[0], loc[1], curr_radius]), axis=0)
+                count_tries = 0
+            else:
+                count_tries += 1
+        curr_radius -= radius_decrease
+
+    return circles
