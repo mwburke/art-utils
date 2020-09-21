@@ -41,8 +41,8 @@ def remix(config):
     if len(output_images) == 1:
         out_img_arr = image_data[output_images[0]]
     else:
-        mask = masks_process(output_config['masks'], img_arr.shape)
-        out_img_arr = np.where(mask, output_images[0], output_images[1])
+        mask = np.repeat(masks_process(output_config['masks'], image_data[output_images[0]].shape)[:, :, np.newaxis], 3, axis=2)
+        out_img_arr = np.where(mask, image_data[output_images[0]], image_data[output_images[1]])
 
     out_img = Image.fromarray(out_img_arr.astype(np.uint8))
 
