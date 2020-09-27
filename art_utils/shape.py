@@ -7,12 +7,11 @@ from art_utils.constants import PI
 
 from typing import List
 from random import random
-from numpy import array, pi, cos, sin, round, append, arange, abs, floor
-from numpy import arctan2, mean, argsort, empty, empty_like, ones, unique
+from numpy import array, pi, cos, sin, round, append, arange, abs, floor, arccos, dot, clip
+from numpy import arctan2, mean, argsort, empty, empty_like, ones, unique, append
 from numpy import meshgrid, vstack, arange, squeeze, atleast_2d, zeros, empty
 from numpy.linalg import norm
-from matplotlib.path import Path
-from skimage.draw import polygon, polygon2mask, circle
+from skimage.draw import polygon2mask, circle
 
 
 def degrees_to_radians(degrees):
@@ -76,11 +75,11 @@ def get_rect_points(x, y, width, height, mode='center', rotation=0):
 
 def rotate(p, origin=(0, 0), degrees=0):
     angle = degrees_to_radians(degrees)
-    R = array([[cos(angle), -sin(angle)],
+    r = array([[cos(angle), -sin(angle)],
                [sin(angle),  cos(angle)]])
     o = atleast_2d(origin)
     p = atleast_2d(p)
-    return squeeze((R @ (p.T-o.T) + o.T).T)
+    return squeeze((r @ (p.T-o.T) + o.T).T)
 
 
 def get_polygon_centroid(points: array) -> array:
@@ -111,7 +110,7 @@ def get_polygon_centroid(points: array) -> array:
 
     i = 0
     j = n_points - 1
-    while (i < n_points):
+    while i < n_points:
         p1 = points[i, :]
         p2 = points[j, :]
         f = p1[0] * p2[1] - p2[0] * p1[1]
@@ -197,48 +196,6 @@ def get_polygon_fill_mask(poly_points: array, arr_size: array) -> array:
     return mask
 
 
-def manual_get_polygon_fill_coords(points: array, pixel_size: float) -> array:
-    # TODO: finish this or drop since we have fast replacement
-    # https://shihn.ca/posts/2019/basic-rasterization/
-    edges = create_edges_entry(points)
-    pixels = []
-    active_edges = []
-
-    y = int(max([edge['y_max'] for edge in edges]))
-
-    while (len(edges) > 0) or (len(active_edges) > 0):
-        temp = []
-        for edge in edges:
-            if (edge['y_max'] >= y) and (edge not in active_edges):
-                active_edges.append(edge)
-            else:
-                temp.append(edge)
-
-        edges = temp
-
-        active_edges = [edge for edge in active_edges if int(floor(edge['y_min'])) != (y + 1)]
-        active_edges.sort(key=lambda x: x['x'])
-
-        # TODO: dedup repeated x values
-        # TODO: revisit the x and y edges, don't seem to line up quite right
-        num_active_edges = len(active_edges)
-
-        for ind in range(int(floor(num_active_edges / 2))):
-            i = ind * 2
-            if i == (num_active_edges - 1):
-                pixels.append([active_edges[i]['x'], y])
-            else:
-                for x in range(int(floor(active_edges[i]['x'])), int(floor(active_edges[i + 1]['x']))):
-                    pixels.append([x, y])
-
-        y -= 1
-        for edge in edges:
-            if edge['slope'] is not None:
-                edge['x'] += edge['slope']
-
-    return unique(round_to_pixels(array(pixels), pixel_size), axis=1)
-
-
 def create_edges_entry(points: array) -> List[dict]:
     # points = round_to_pixels(points, pixel_size)
 
@@ -281,7 +238,7 @@ def get_bounding_box(points):
     return [min_x, max_x, min_y, max_y]
 
 
-def circle_pack(x, y, max_radius, min_radius, radius_decrease, num_retries):
+def circle_pack(x, y, max_radius, min_radius, radius_decrease, num_retries, buffer):
     circles = array([[random() * x, random() * y, max_radius]])
 
     curr_radius = max_radius
@@ -290,13 +247,181 @@ def circle_pack(x, y, max_radius, min_radius, radius_decrease, num_retries):
         count_tries = 0
         while count_tries < num_retries:
             loc = array([random() * x, random() * y])
-            count_overlaps = sum((norm(loc - circles[:, 0:2], axis=1) - circles[:, 2] - curr_radius) < 0)
+            count_overlaps = sum((norm(loc - circles[:, 0:2], axis=1) - circles[:, 2] - curr_radius - buffer) < 0)
             if count_overlaps == 0:
                 circles = append(circles, array([[loc[0], loc[1], curr_radius]]), axis=0)
-                # circles = append(circles, array([loc[0], loc[1], curr_radius]), axis=0)
                 count_tries = 0
             else:
                 count_tries += 1
         curr_radius -= radius_decrease
 
     return circles
+
+
+def polygon_centroid(points):
+    # This assumes
+    if points[0, :] != points[-1, :]:
+        points = append(points, points[0, :])
+
+    twice_area = 0
+    x = 0
+    y = 0
+    num_points = points.shape[0]
+    i = 0
+    j = num_points - 1
+    while i < num_points:
+        p1 = points[i, :]
+        p2 = points[j, :]
+        f = p1[0] * p2[1] - p2[0] * p1[1]
+        twice_area += f
+        x += (p1[0] + p2[0]) * f
+        y += (p1[1] + p2[1]) * f
+
+    f = twice_area * 3
+    return array([x / f, y / f])
+
+
+def polygon_mean_center(points):
+    return mean(points, axis=0)
+
+
+def intersect_point(p1, p2, p3, p4):
+    ua = ((p4[0] - p3[0]) * (p1[1] - p3[1]) -
+      (p4[1] - p3[1]) * (p1[0] - p3[0])) / \
+      ((p4[1] - p3[1]) * (p2[0] - p1[0]) -
+      (p4[0] - p3[0]) * (p2[1] - p1[1]))
+
+    ub = ((p2[0] - p1[0]) * (p1[1] - p3[1]) -
+      (p2[1] - p1[1]) * (p1[0] - p3[0])) / \
+      ((p4[1] - p3[1]) * (p2[0] - p1[0]) -
+      (p4[0] - p3[0]) * (p2[1] - p1[1]))
+
+    x = p1[0] + ua * (p2[0] - p1[0])
+    y = p1[1] + ua * (p2[1] - p1[1])
+
+    intersection = array([x, y])
+
+    if (ua < 0) | (ua > 1) | (ub < 0) | (ub > 1):
+        intersection = None
+
+    return intersection
+
+
+def get_lines_from_points(points):
+    lines = []
+    for i in range(points.shape[0]):
+        lines.append([points[i, :], points[(i + 1) % points.shape[0], :]])
+    return lines
+
+
+def get_points_from_lines(lines):
+    points_list = []
+    for line in lines:
+        points_list.append(line[0])
+    return array(points_list)
+
+
+def convert_points_clockwise2(points):
+    mean_center = polygon_mean_center(points)
+    point_lines = points - mean_center
+    point_lines_unit = point_lines / norm(point_lines)
+    reference_line = array([0, 1])
+    dot_product = clip(dot(point_lines_unit, reference_line), -1.0, 1.0)
+    angles = arccos(dot_product)
+    return points[argsort(angles)]
+
+
+class CuttablePolygon(object):
+    def __init__(self, points, times_split=0):
+        self.points = convert_points_clockwise(points)
+        self.center = self.get_center()
+        self.times_split = times_split
+
+    def get_center(self):
+        centroid = get_polygon_centroid(self.points)
+        return centroid
+
+    def get_shrunken_points(self, ratio):
+        return self.points * ratio + self.center * (1 - ratio)
+
+    def intersect_points(self, p1, p2):
+        # TODO: fix this, assigning one point to opposite poly somewhere
+        intersections = []
+        intersect_line_inds = []
+        lines = get_lines_from_points(self.points)
+        for i, line in enumerate(lines):
+            intersection = intersect_point(p1, p2, line[0], line[1])
+            if intersection is not None:
+                intersections.append(intersection)
+                intersect_line_inds.append(i)
+
+        if len(intersections) == 2:
+
+            if intersect_line_inds[0] > intersect_line_inds[1]:
+                intersections = [intersections[1], intersections[0]]
+                intersect_line_inds = [intersect_line_inds[1], intersect_line_inds[0]]
+
+            return intersections, intersect_line_inds
+        else:
+            return None, None
+
+    def split(self, p1, p2):
+
+        lines = get_lines_from_points(self.points)
+
+        intersect_points, intersect_line_inds = self.intersect_points(p1, p2)
+
+        if intersect_points is None:
+            return [self]
+
+        poly_lines_1 = []
+        poly_lines_2 = []
+
+        num_lines = len(lines)
+        checkpoints = 0
+
+        for i in range(num_lines):
+            if checkpoints == 0:
+                if i in intersect_line_inds:
+                    poly_lines_1.append([intersect_points[1], intersect_points[0]])
+                    poly_lines_1.append([intersect_points[0], lines[i][1]])
+                    poly_lines_2.append([lines[i][0], intersect_points[0]])
+                    poly_lines_2.append([intersect_points[0], intersect_points[1]])
+                    checkpoints += 1
+                else:
+                    poly_lines_2.append(lines[i])
+            elif checkpoints == 1:
+                if i in intersect_line_inds:
+                    poly_lines_1.append([lines[i][0], intersect_points[1]])
+                    poly_lines_2.append([intersect_points[1], lines[i][1]])
+                    checkpoints += 1
+                else:
+                    poly_lines_1.append(lines[i])
+            else:
+                poly_lines_2.append(lines[i])
+
+        poly_pts_1 = get_points_from_lines(poly_lines_1)
+        poly_pts_2 = get_points_from_lines(poly_lines_2)
+
+        if poly_pts_1.shape[0] > 0 and poly_pts_2.shape[0] > 0:
+
+            poly_1 = CuttablePolygon(poly_pts_1, self.times_split + 1)
+            poly_2 = CuttablePolygon(poly_pts_2, self.times_split + 1)
+
+            return [poly_1, poly_2]
+
+        return [self]
+
+
+def split_polygons(polygons, cut_lines):
+
+    for line in cut_lines:
+        new_polys = []
+        for poly in polygons:
+            split_polys = poly.split(line[0], line[1])
+            for sp in split_polys:
+                new_polys.append(sp)
+
+        polygons = new_polys
+
+    return polygons

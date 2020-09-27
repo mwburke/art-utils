@@ -28,4 +28,5 @@ for i in range(num_overlaps):
     full_mask[final_points[:, 0], final_points[:, 1], i] = True
 
 arr = (np.sum(full_mask, axis=2) >= 2).astype(np.uint8) * 255
+
 Image.fromarray(arr).show()
