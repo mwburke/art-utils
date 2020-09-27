@@ -4,7 +4,7 @@ with open("README.md", 'r') as f:
     long_description = f.read()
 
 setup(name='art_utils',
-      version='0.0.2',
+      version='0.0.3',
       description='Python utilities for creating generative art',
       license='GPLv3',
       long_description=long_description,
